@@ -80,6 +80,22 @@ setInterval(sweepExpired, 10000);
 io.on('connection', (socket) => {
   socket.data.rooms = new Set();
   const inRoom = (room) => socket.data.rooms.has(room);
+  // Rooms are open. If the server forgot a room (Render free restarts/sleeps and wipes memory),
+  // quietly re-create it and re-join this socket so chat never silently stops working.
+  const ensureIn = (room) => {
+    if (inRoom(room)) return true;
+    const uid = socket.data.uid;
+    if (!room || !uid) return false;
+    let m = db.meta[room];
+    if (!m) m = db.meta[room] = { type: 'room', members: {} };
+    if (!m.members[uid]) {
+      if (Object.keys(m.members).length >= MAX_ROOM) return false;
+      m.members[uid] = socket.data.name; save();
+      socket.to(room).emit('members', roomInfo(room));
+    }
+    socket.join(room); socket.data.rooms.add(room);
+    return true;
+  };
 
   // Sent once on connect: who I am + the chats saved in my browser.
   socket.on('hello', (d = {}) => {
@@ -87,10 +103,10 @@ io.on('connection', (socket) => {
     socket.data.name = clip(d.name, 30).trim() || 'Guest';
     const out = [];
     for (const room of Array.isArray(d.rooms) ? d.rooms.slice(0, 100) : []) {
+      if (typeof room !== 'string' || !room || !ensureIn(room)) continue;   // rooms are open: re-join, or re-create if the server forgot it
       const m = db.meta[room];
-      if (!m || !m.members[socket.data.uid]) continue;
       if (m.members[socket.data.uid] !== socket.data.name) { m.members[socket.data.uid] = socket.data.name; save(); io.to(room).emit('members', roomInfo(room)); }
-      socket.join(room); socket.data.rooms.add(room); out.push(payload(room));
+      out.push(payload(room));
     }
     socket.emit('rooms', out);
   });
@@ -114,7 +130,7 @@ io.on('connection', (socket) => {
   // m.text / m.media.* / m.reply.* arrive as ciphertext ("e1.<iv>.<ct>").
   socket.on('chat', (m, ack) => {
     const room = m && m.room;
-    if (!room || !inRoom(room)) return;
+    if (!room || !ensureIn(room)) return;
     const ts = Date.now();
     const msg = {
       id: clip(m.id, 40), uid: socket.data.uid, name: socket.data.name, ts,
@@ -134,7 +150,7 @@ io.on('connection', (socket) => {
     if (typeof ack === 'function') ack(msg.ts);
   });
   socket.on('receipt', (d = {}) => { if (inRoom(d.room)) socket.to(d.room).emit('receipt', { room: d.room, id: d.id, kind: d.kind }); });
-  socket.on('typing', (d = {}) => { if (inRoom(d.room)) socket.to(d.room).emit('typing', { room: d.room, uid: socket.data.uid, name: socket.data.name, on: !!d.on }); });
+  socket.on('typing', (d = {}) => { if (ensureIn(d.room)) socket.to(d.room).emit('typing', { room: d.room, uid: socket.data.uid, name: socket.data.name, on: !!d.on }); });
   socket.on('react', (d = {}) => {
     const m = inRoom(d.room) && findMsg(d.room, d.id);
     if (!m || m.deleted) return;
@@ -152,7 +168,7 @@ io.on('connection', (socket) => {
 
   /* ----- calls: one call per room; everyone in the room is told when it starts ----- */
   socket.on('call-join', (d = {}) => {
-    const room = d.room; if (!inRoom(room)) return;
+    const room = d.room; if (!ensureIn(room)) return;
     const mode = d.mode === 'audio' ? 'audio' : 'video';
     let c = calls.get(room);
     if (!c) { c = { startedAt: Date.now(), mode, starter: socket.data.name, starterUid: socket.data.uid, parts: new Map() }; calls.set(room, c); }
