@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#008069">
+<title>Call a friend</title>
+<style>
+  :root {
+    --green: #008069; --green-dark: #006b58; --accent: #25d366;
+    --bg: #f0f2f5; --panel: #ffffff; --ink: #111b21; --muted: #667781; --line: #e2e6e9;
+    --chat-bg: #efeae2; --in: #ffffff; --out: #d9fdd3; --composer: #f0f2f5; --field: #ffffff;
+    --stage: #0b141a; --tile: #16232b; --danger: #ea0038; --hover: #f5f6f6; --active: #e9edef;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b141a; --panel: #111b21; --ink: #e9edef; --muted: #8696a0; --line: #222d34;
+            --chat-bg: #0b141a; --in: #202c33; --out: #005c4b; --composer: #202c33; --field: #2a3942; --hover: #1a252c; --active: #2a3942; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.4 "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  [hidden] { display: none !important; }
+  button { font: inherit; cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  svg { fill: currentColor; }
+  .circle { width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; font-size: 2.6rem; font-weight: 500; color: #fff; background: #6b7c85; flex: none; }
+  .circle.sm { width: 48px; height: 48px; font-size: 1.3rem; }
+  .ibtn { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; }
+  .ibtn:hover { background: rgba(128,128,128,.15); } .ibtn svg { width: 24px; height: 24px; }
+
+  /* ---------- Starting page ---------- */
+  #lobby { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; }
+  #lobby::before { content: ""; position: fixed; inset: 0 0 auto 0; height: 220px; background: var(--green); z-index: 0; }
+  .brand { display: flex; align-items: center; gap: 12px; color: #fff; position: relative; z-index: 1; width: min(440px, calc(100% - 24px)); margin-top: 28px; font-size: 1.1rem; font-weight: 600; }
+  .brand svg { width: 28px; height: 28px; }
+  .lobby-card { position: relative; z-index: 1; width: min(440px, calc(100% - 24px)); margin: 20px 0 32px; background: var(--panel); border-radius: 12px; padding: 26px 22px 22px; box-shadow: 0 6px 24px rgba(11,20,26,.18); }
+  .lobby-card h1 { margin: 0 0 4px; font-size: 1.35rem; font-weight: 600; }
+  .lead { margin: 0 0 6px; color: var(--muted); }
+  label { display: block; font-size: .85rem; color: var(--green); font-weight: 600; margin: 12px 0 4px; }
+  @media (prefers-color-scheme: dark) { label { color: var(--accent); } }
+  .field { width: 100%; padding: 11px 12px; font: inherit; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 8px; }
+  .note { display: flex; gap: 8px; align-items: flex-start; margin: 14px 0 0; font-size: .84rem; color: var(--muted); }
+  .note svg { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--green); }
+  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+  .mode { padding: 12px 6px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--ink); font-weight: 600; font-size: .88rem; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .mode svg { width: 22px; height: 22px; color: var(--green); }
+  .mode:hover { background: var(--hover); }
+  .mode.go { background: var(--green); border-color: var(--green); color: #fff; }
+  .mode.go svg { color: #fff; }
+  .mode.go:hover { background: var(--green-dark); }
+  @media (max-width: 360px) { .modes { grid-template-columns: 1fr; } }
+  .hint { margin: 12px 0 0; font-size: .82rem; color: var(--muted); }
+  .err { min-height: 1.4em; margin: 10px 0 0; color: var(--danger); font-size: .9rem; }
+
+  /* ---------- App: chat list + chat ---------- */
+  #app { height: 100dvh; display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); }
+  #side { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-right: 1px solid var(--line); position: relative; }
+  .sh { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--green); color: #fff; }
+  .sh .title { flex: 1; font-weight: 600; }
+  .sh .ibtn { color: #fff; } .sh .ibtn:hover { background: rgba(255,255,255,.16); }
+  .search { padding: 8px 10px; background: var(--panel); }
+  .search input { width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 18px; background: var(--field); color: var(--ink); font: inherit; }
+  #chatList { flex: 1; overflow-y: auto; }
+  .item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 0; background: transparent; color: var(--ink); text-align: left; }
+  .item > * { pointer-events: none; }
+  .item:hover { background: var(--hover); } .item.active { background: var(--active); }
+  .item .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .pv { color: var(--muted); font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .pv.call { color: var(--green); font-weight: 600; }
+  .item .meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: .75rem; color: var(--muted); }
+  .item .meta.new { color: var(--green); font-weight: 600; }
+  .badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--accent); color: #06220f; font-weight: 700; font-size: .75rem; display: grid; place-items: center; }
+  .noitems { padding: 28px 20px; text-align: center; color: var(--muted); }
+
+  #main { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--chat-bg); }
+  #empty { margin: auto; text-align: center; color: var(--muted); padding: 24px; }
+  #empty svg { width: 90px; height: 90px; color: var(--line); }
+  #pane { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+  .chead { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 6px; background: var(--green); color: #fff; }
+  .chead .circle { width: 40px; height: 40px; font-size: 1.1rem; }
+  .chead .who { min-width: 0; flex: 1; }
+  .chead .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chead .sub { font-size: .8rem; opacity: .88; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chead .ibtn { color: #fff; } .chead .ibtn:hover { background: rgba(255,255,255,.16); }
+  #back { display: none; }
+  #banner { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--out); color: var(--ink); font-size: .9rem; flex-wrap: wrap; }
+  #banner span { flex: 1; min-width: 120px; font-weight: 600; }
+  #banner button { border: 0; border-radius: 16px; padding: 5px 14px; background: var(--green); color: #fff; font-weight: 600; }
+  #messages { flex: 1; overflow-y: auto; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 4px; }
+  .msg { max-width: 80%; padding: 6px 9px 5px; border-radius: 8px; box-shadow: 0 1px 0 rgba(11,20,26,.13); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.in { align-self: flex-start; background: var(--in); border-top-left-radius: 0; }
+  .msg.out { align-self: flex-end; background: var(--out); border-top-right-radius: 0; }
+  .msg .who { display: block; font-size: .8rem; font-weight: 600; margin-bottom: 1px; }
+  .msg .time { font-size: .68rem; color: var(--muted); margin-left: 10px; float: right; margin-top: 6px; }
+  .msg.del { font-style: italic; color: var(--muted); }
+  .msg.locked { font-style: italic; color: var(--muted); }
+  .lockline { display: inline-flex; align-items: center; gap: 6px; }
+  .lockline svg { width: 14px; height: 14px; flex: none; }
+  .composer { display: flex; align-items: center; gap: 6px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--composer); }
+  .composer input[type=text] { flex: 1; min-width: 0; padding: 11px 14px; border: 0; border-radius: 22px; background: var(--field); color: var(--ink); font: inherit; }
+  .composer.rec input { color: var(--danger); }
+  .send { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 0; background: var(--green); color: #fff; display: grid; place-items: center; }
+  .send:hover { background: var(--green-dark); } .send svg { width: 22px; height: 22px; }
+  .send:disabled { background: var(--line); color: var(--muted); cursor: default; }
+  .send:disabled:hover { background: var(--line); }
+  .ibtn.rec-arm { color: var(--danger); }
+  .sys { align-self: center; background: rgba(225,218,208,.92); color: #54656f; font-size: .78rem; padding: 4px 10px; border-radius: 8px; margin: 6px 0; text-align: center; }
+  @media (prefers-color-scheme: dark) { .sys { background: #182229; color: #8696a0; } }
+
+  /* ---------- Call overlay (opens over the chat) ---------- */
+  #callView { position: absolute; inset: 0; z-index: 30; background: var(--stage); overflow: hidden; }
+  #grid { position: absolute; inset: 0 0 0 0; display: grid; gap: 3px; grid-template-columns: 1fr; grid-auto-rows: 1fr; }
+  #grid[data-n="2"], #grid[data-n="3"], #grid[data-n="4"] { grid-template-columns: 1fr 1fr; }
+  #grid[data-n="5"], #grid[data-n="6"] { grid-template-columns: 1fr 1fr 1fr; }
+  #grid[data-n="3"] .tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .tile { position: relative; background: var(--tile); overflow: hidden; min-height: 0; min-width: 0; }
+  .tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; background: var(--tile); }
+  .tile video.on { display: block; }
+  .tile .av { position: absolute; inset: 0; display: grid; place-items: center; }
+  #grid[data-n="3"] .circle, #grid[data-n="4"] .circle { width: 72px; height: 72px; font-size: 2rem; }
+  #grid[data-n="5"] .circle, #grid[data-n="6"] .circle { width: 56px; height: 56px; font-size: 1.5rem; }
+  .label { position: absolute; left: 8px; top: 8px; z-index: 1; display: flex; gap: 6px; align-items: center; max-width: calc(100% - 16px); background: rgba(0,0,0,.55); color: #fff; font-size: .8rem; padding: 2px 8px; border-radius: 10px; }
+  .label .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .label .mb { color: #ffb4a8; font-size: .72rem; }
+  #wait { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #e9edef; text-align: center; padding: 0 16px 70px; }
+  #wait .t { font-size: 1.2rem; font-weight: 600; } #wait .s { color: #8696a0; }
+  #localVideo { position: absolute; right: 12px; bottom: 88px; width: 24%; max-width: 150px; min-width: 88px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 10px; background: #222; border: 2px solid rgba(255,255,255,.55); transform: scaleX(-1); z-index: 3; }
+  #callView.audio #localVideo { display: none; }
+  #pill { position: absolute; bottom: 88px; left: 12px; z-index: 4; background: rgba(0,0,0,.6); color: #fff; padding: 3px 11px; border-radius: 12px; font-size: .82rem; font-variant-numeric: tabular-nums; }
+  #callTitle { position: absolute; top: 10px; left: 12px; right: 12px; z-index: 4; color: #fff; font-weight: 600; text-shadow: 0 1px 4px rgba(0,0,0,.7); text-align: center; pointer-events: none; }
+  .bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; display: flex; justify-content: center; gap: 14px; padding: 14px 12px; background: linear-gradient(transparent, rgba(0,0,0,.6)); }
+  .round { width: 52px; height: 52px; border-radius: 50%; border: 0; display: grid; place-items: center; position: relative; background: rgba(255,255,255,.2); color: #fff; backdrop-filter: blur(6px); }
+  .round svg { width: 24px; height: 24px; } .round:hover { background: rgba(255,255,255,.32); }
+  .round.off { background: #fff; color: #111b21; }
+  .round.off::after { content: ""; position: absolute; width: 30px; height: 2.5px; background: currentColor; transform: rotate(-45deg); border-radius: 2px; box-shadow: 0 0 0 1.5px #fff; }
+  .round.hang { background: var(--danger); } .round.hang:hover { background: #c40030; }
+
+  /* ---------- Dialogs ---------- */
+  #modal { position: fixed; inset: 0; z-index: 60; background: rgba(11,20,26,.55); display: grid; place-items: center; padding: 16px; }
+  .card { width: min(400px, 100%); background: var(--panel); border-radius: 12px; padding: 22px; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+  .card h2 { margin: 0 0 4px; font-size: 1.2rem; }
+  .card .row { display: flex; gap: 10px; margin-top: 18px; } .card .row button { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid var(--line); background: transparent; color: var(--ink); font-weight: 600; }
+  .card .row button.go { background: var(--green); border-color: var(--green); color: #fff; }
+  #incoming, #sipIncoming { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 70; width: min(380px, calc(100% - 24px)); background: #1f2c34; color: #e9edef; border-radius: 14px; padding: 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+  #incoming .txt, #sipIncoming .txt { flex: 1; min-width: 0; }
+  #incoming .txt b, #sipIncoming .txt b { display: block; }
+  #incoming .txt span, #sipIncoming .txt span { color: #8696a0; font-size: .85rem; }
+  #incoming button, #sipIncoming button { width: 46px; height: 46px; border-radius: 50%; border: 0; color: #fff; display: grid; place-items: center; flex: none; }
+  #incoming button svg, #sipIncoming button svg { width: 22px; height: 22px; }
+  #gtoast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 80; background: rgba(0,0,0,.82); color: #fff; padding: 8px 16px; border-radius: 18px; font-size: .88rem; max-width: 88%; text-align: center; }
+
+  /* ---------- Phones: list OR chat ---------- */
+  @media (max-width: 800px) {
+    #app { grid-template-columns: minmax(0, 1fr); }
+    #app #main { display: none; } #app.inchat #side { display: none; } #app.inchat #main { display: flex; }
+    #back { display: grid; }
+    .round { width: 46px; height: 46px; }
+  }
+  @media (prefers-reduced-motion: no-preference) { .msg { animation: pop .12s ease-out; } }
+  @keyframes pop { from { transform: scale(.96); opacity: 0; } }
+
+  /* ---------- Message features ---------- */
+  .msg { position: relative; cursor: pointer; }
+  .quote { border-left: 4px solid var(--green); background: rgba(0,0,0,.06); border-radius: 6px; padding: 4px 8px; margin-bottom: 4px; font-size: .85rem; }
+  .quote b { display: block; color: var(--green); font-size: .78rem; }
+  .quote span { color: var(--muted); display: block; max-height: 2.8em; overflow: hidden; }
+  .msg img.pic { display: block; width: 260px; max-width: 100%; height: auto; max-height: 340px; object-fit: cover; border-radius: 6px; margin-bottom: 3px; cursor: zoom-in; }
+  .msg audio { display: block; width: 220px; max-width: 100%; height: 38px; margin-bottom: 2px; }
+  .msg a { color: #027eb5; }
+  .msg a.file, .msg .file.lock { display: block; padding: 8px 10px; background: rgba(0,0,0,.06); border-radius: 6px; margin-bottom: 3px; text-decoration: none; color: inherit; font-weight: 600; }
+  .tick { margin-left: 3px; letter-spacing: -2px; } .tick.read { color: #53bdeb; }
+  .reacts { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; clear: both; }
+  .reacts span { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 0 6px; font-size: .8rem; cursor: pointer; }
+  .reacts span.me { border-color: var(--green); }
+  .actions { position: absolute; top: 100%; z-index: 8; margin-top: 4px; display: flex; gap: 2px; align-items: center; background: var(--panel);
+             color: var(--ink); border-radius: 22px; padding: 4px 6px; box-shadow: 0 2px 10px rgba(0,0,0,.25); font-style: normal; white-space: nowrap; }
+  .actions.above { top: auto; bottom: 100%; margin-top: 0; margin-bottom: 4px; }
+  .msg.out .actions { right: 0; } .msg.in .actions { left: 0; }
+  .actions button { border: 0; background: transparent; font-size: 1.3rem; padding: 2px 5px; border-radius: 8px; color: inherit; }
+  .actions button.txt { font-size: .85rem; font-weight: 600; padding: 4px 8px; }
+  .actions button:hover { background: var(--bg); }
+  #replyBar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--composer); border-top: 1px solid var(--line); }
+  #replyBar .rq { flex: 1; min-width: 0; border-left: 4px solid var(--green); padding-left: 8px; font-size: .85rem; }
+  #replyBar b { display: block; color: var(--green); } #replyBar span { display: block; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #emoji { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 2px; padding: 8px; background: var(--composer); max-height: 170px; overflow-y: auto; border-top: 1px solid var(--line); }
+  #emoji button { border: 0; background: transparent; font-size: 1.4rem; padding: 4px; border-radius: 8px; }
+  #emoji button:hover { background: var(--bg); }
+  #lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.88); display: grid; place-items: center; cursor: zoom-out; }
+  #lightbox img { max-width: 94vw; max-height: 94vh; }
+
+  /* ---------- Office line: SIP over WebSocket (Issabel / Asterisk) ---------- */
+  #sipBtn.on { background: rgba(255,255,255,.24); }
+  #sipPanel { display: none; background: var(--panel); border-bottom: 1px solid var(--line); padding: 4px 12px 12px; }
+  #sipPanel.open { display: block; }
+  #sipPanel .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  #sipPanel label { display: block; font-size: .72rem; color: var(--muted); margin: 8px 0 3px; }
+  #sipPanel input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: var(--ink); font: inherit; min-width: 0; }
+  #sipPanel .srow { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+  #sipPanel .srow .fill { flex: 1; min-width: 0; display: flex; }
+  #sipPanel .srow .fill input { flex: 1; }
+  #sipDot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+  #sipDot.ok { background: var(--accent); } #sipDot.err { background: var(--danger); } #sipDot.wait { background: #e6a700; }
+  #sipStatus { font-size: .84rem; color: var(--muted); min-width: 0; }
+  .sipbtn { border: 0; border-radius: 16px; padding: 8px 14px; font-weight: 600; background: var(--green); color: #fff; white-space: nowrap; }
+  .sipbtn.gray { background: var(--field); color: var(--ink); border: 1px solid var(--line); }
+  #sipCallBar { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 65; display: flex; align-items: center; gap: 10px; background: #1f2c34; color: #e9edef; border-radius: 30px; padding: 8px 10px 8px 16px; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+  #sipCallBar .live { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); animation: sipPulse 1.4s infinite; flex: none; }
+  #sipCallBar b { font-weight: 600; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #sipCallBar span { color: #8696a0; font-size: .85rem; font-variant-numeric: tabular-nums; }
+  #sipCallBar .ibtn { color: #e9edef; width: 36px; height: 36px; }
+  #sipCallBar .ibtn svg { width: 20px; height: 20px; }
+  #sipCallBar .ibtn.end { background: var(--danger); color: #fff; }
+  #sipCallBar .ibtn.muted { color: #ffb4a8; }
+  @keyframes sipPulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  @media (max-width: 480px) { #sipPanel .g2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<!-- ===== Starting page ===== -->
+<section id="lobby">
+  <div class="brand"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>Call a friend</div>
+  <div class="lobby-card">
+    <h1>Join a room</h1>
+    <p class="lead">Everyone who enters the same room name is in the same call or chat.</p>
+    <label for="nameInput">Your name</label>
+    <input id="nameInput" class="field" maxlength="30" autocomplete="nickname" placeholder="e.g. Rafi">
+    <label for="roomInput">Room name</label>
+    <input id="roomInput" class="field" maxlength="64" autocomplete="off" placeholder="e.g. friday-night (empty = new room)">
+    <label for="keyInput">Secret key (optional)</label>
+    <input id="keyInput" class="field" maxlength="128" autocomplete="off" placeholder="Leave empty to create a new key" spellcheck="false">
+    <p class="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 8h-1V6a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zM10 6a2 2 0 0 1 4 0v2h-4V6zm6 14H8V10h8v10zm-4-3a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg><span>Messages are end-to-end encrypted with this key. The invite link carries it. It never goes to the server.</span></p>
+    <div class="modes">
+      <button id="modeVideo" class="mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 10.500V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.500l4 4v-11l-4 4z"/></svg>Video call</button>
+      <button id="modeAudio" class="mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.600 10.800a15.100 15.100 0 0 0 6.600 6.600l2.200-2.200a1 1 0 0 1 1-.25c1.100.37 2.300.57 3.600.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.500a1 1 0 0 1 1 1c0 1.250.2 2.450.57 3.570a1 1 0 0 1-.25 1z"/></svg>Audio call</button>
+      <button id="modeChat" class="mode go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-3 9h-4v4h-2v-4H7V9h4V5h2v4h4v2z" transform="translate(0,-1)"/></svg>Chat</button>
+    </div>
+    <p class="hint">Chat needs no camera or microphone. Group calls work best with up to 6 people. Messages auto-delete 5 minutes after they are sent.</p>
+    <p id="lobbyError" class="err" role="alert"></p>
+  </div>
+</section>
+
+<!-- ===== Chat list + chat ===== -->
+<section id="app" hidden>
+  <aside id="side">
+    <div class="sh">
+      <button id="meBtn" class="circle sm" aria-label="Your profile (tap to change name)">?</button>
+      <div class="title">Chats</div>
+      <button id="newBtn" class="ibtn" aria-label="Join or create a room" title="Join or create a room">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4zm-4 9h-4v4h-2v-4H8v-2h4V7h2v4h4v2z"/></svg>
+      </button>
+    </div>
+    <div class="search"><input id="searchInput" type="search" placeholder="Search chats" aria-label="Search chats"></div>
+    <div id="chatList"></div>
+  </aside>
+
+  <main id="main">
+    <div id="empty">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>
+      <h2>Call a friend</h2>
+      <p>Pick a chat on the left, or tap the + icon to join a room.</p>
+    </div>
+
+    <section id="pane" hidden>
+      <header class="chead">
+        <button id="back" class="ibtn" aria-label="Back to chats"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.830l5.590-5.590L12 4l-8 8 8 8 1.410-1.410L7.830 13H20v-2z"/></svg></button>
+        <div id="chatCircle" class="circle">#</div>
+        <div class="who"><div id="chatName" class="name"></div><div id="chatSub" class="sub"></div></div>
+        <button id="videoBtn" class="ibtn" aria-label="Video call" title="Video call"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 10.500V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.500l4 4v-11l-4 4z"/></svg></button>
+        <button id="audioBtn" class="ibtn" aria-label="Audio call" title="Audio call"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.600 10.800a15.100 15.100 0 0 0 6.600 6.600l2.200-2.200a1 1 0 0 1 1-.25c1.100.37 2.300.57 3.600.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.500a1 1 0 0 1 1 1c0 1.250.2 2.450.57 3.570a1 1 0 0 1-.25 1z"/></svg></button>
+        <button id="sipBtn" class="ibtn" aria-label="Office line (SIP)" title="Office line — receive calls from the call centre"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1a9 9 0 0 0-9 9v7a3 3 0 0 0 3 3h3v-8H5v-2a7 7 0 0 1 14 0v2h-4v8h3a3 3 0 0 0 3-3v-7a9 9 0 0 0-9-9z"/></svg></button>
+        <button id="linkBtn" class="ibtn" aria-label="Copy invite link (carries the room key)" title="Copy invite link (carries the room key)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.900 12a3.100 3.100 0 0 1 3.100-3.100h4V7H7a5 5 0 0 0 0 10h4v-1.900H7A3.100 3.100 0 0 1 3.900 12zM8 13h8v-2H8v2zm9-6h-4v1.900h4a3.100 3.100 0 0 1 0 6.200h-4V17h4a5 5 0 0 0 0-10z"/></svg></button>
+        <button id="leaveBtn" class="ibtn" aria-label="Remove chat from list" title="Remove chat from list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.500l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
+      </header>
+      <div id="banner" hidden><span id="bannerText"></span><button id="bReturn" hidden>Return to call</button><button id="bJoinV" hidden>Join video</button><button id="bJoinA" hidden>Join audio</button></div>
+      <div id="sipPanel">
+        <div class="srow" style="margin-top:6px"><span id="sipDot"></span><span id="sipStatus">Office line is off</span></div>
+        <div class="g2">
+          <div><label for="sipExt">Extension (SIP user)</label><input id="sipExt" placeholder="e.g. C07030512" autocomplete="off" spellcheck="false"></div>
+          <div><label for="sipPass">SIP password</label><input id="sipPass" type="password" placeholder="From the PBX admin" autocomplete="off"></div>
+        </div>
+        <div class="g2">
+          <div><label for="sipServer">PBX WebSocket URL</label><input id="sipServer" placeholder="wss://172.31.21.35:8089/ws" spellcheck="false"></div>
+          <div><label for="sipDomain">SIP domain</label><input id="sipDomain" placeholder="172.31.21.35" spellcheck="false"></div>
+        </div>
+        <div class="srow">
+          <div class="fill"><input id="sipDialNum" placeholder="Dial a number, e.g. 09611666111" inputmode="tel"></div>
+          <button id="sipDialBtn" class="sipbtn">Call</button>
+        </div>
+        <div class="srow" style="justify-content: flex-end">
+          <button id="sipOffBtn" class="sipbtn gray">Disconnect</button>
+          <button id="sipSaveBtn" class="sipbtn">Save &amp; connect</button>
+        </div>
+      </div>
+      <div id="messages" aria-live="polite"></div>
+      <div id="replyBar" hidden>
+        <div class="rq"><b id="rqName"></b><span id="rqText"></span></div>
+        <button id="rqClose" class="ibtn" aria-label="Cancel reply"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.400 17.600 5 12 10.600 6.400 5 5 6.400 10.600 12 5 17.600 6.400 19 12 13.400 17.600 19 19 17.600 13.400 12z"/></svg></button>
+      </div>
+      <div id="emoji" hidden></div>
+      <div class="composer" id="composer">
+        <button id="emojiBtn" class="ibtn" aria-label="Emoji"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-3.500-9a1.300 1.300 0 1 0 0-2.600 1.300 1.300 0 0 0 0 2.600zm7 0a1.300 1.300 0 1 0 0-2.600 1.300 1.300 0 0 0 0 2.600zM12 17.500c2 0 3.700-1.200 4.400-3H7.600c.7 1.800 2.400 3 4.400 3z"/></svg></button>
+        <button id="attachBtn" class="ibtn" aria-label="Attach photo or file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.500 6v11.500a4 4 0 0 1-8 0V5a2.500 2.500 0 0 1 5 0v10.500a1 1 0 0 1-2 0V6H10v9.500a2.500 2.500 0 0 0 5 0V5a4 4 0 0 0-8 0v12.500a5.500 5.500 0 0 0 11 0V6h-1.500z"/></svg></button>
+        <input id="fileInput" type="file" hidden>
+        <input id="msgInput" type="text" placeholder="Type a message" maxlength="2000" autocomplete="off" aria-label="Message">
+        <button id="voiceBtn" class="ibtn" aria-label="Record voice message" title="Record voice message"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.920V21h2v-3.080A7 7 0 0 0 19 11h-2z"/></svg></button>
+        <button id="cancelRec" class="ibtn" aria-label="Cancel recording" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.500l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
+        <button id="sendBtn" class="send" aria-label="Send message" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.010 21 23 12 2.010 3 2 10l15 2-15 2z"/></svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- call opens over the chat, like WhatsApp -->
+    <section id="callView" hidden>
+      <div id="grid" data-n="0"></div>
+      <div id="wait"><div class="circle">?</div><div class="t">Calling…</div><div class="s">Waiting for others to join</div></div>
+      <div id="callTitle"></div>
+      <video id="localVideo" autoplay playsinline muted></video>
+      <div id="pill"></div>
+      <div class="bar">
+        <button id="micBtn" class="round" aria-label="Mute microphone" title="Mute microphone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.920V21h2v-3.080A7 7 0 0 0 19 11h-2z"/></svg></button>
+        <button id="camBtn" class="round" aria-label="Turn camera off" title="Turn camera off"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 10.500V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.500l4 4v-11l-4 4z"/></svg></button>
+        <button id="minBtn" class="round" aria-label="Back to chat (call continues)" title="Back to chat (call continues)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg></button>
+        <button id="hangBtn" class="round hang" aria-label="Hang up" title="Hang up"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9c-1.600 0-3.150.25-4.600.72v3.100c0 .39-.23.74-.56.9-.98.49-1.870 1.120-2.660 1.850-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.080a.956.956 0 0 1-.29-.7c0-.28.11-.53.29-.71C3.340 8.780 7.460 7 12 7s8.660 1.780 11.710 4.670c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.480 2.480c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.270 11.270 0 0 0-2.670-1.850.996.996 0 0 1-.56-.9v-3.100C15.150 9.250 13.600 9 12 9z"/></svg></button>
+      </div>
+    </section>
+  </main>
+</section>
+
+<!-- Join room dialog -->
+<div id="modal" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <h2 id="mTitle">Join a room</h2>
+    <p id="mHint" class="lead">Everyone who enters the same room name is in the same chat. Enter the secret key the room owner gave you, if there is one.</p>
+    <label for="mInput">Room name</label>
+    <input id="mInput" class="field" maxlength="64" autocomplete="off">
+    <label for="mKey">Secret key (optional)</label>
+    <input id="mKey" class="field" maxlength="128" autocomplete="off" spellcheck="false">
+    <p class="hint">Leave the key empty to create a fresh one, then share the invite link from the chat.</p>
+    <p id="mErr" class="err" role="alert"></p>
+    <div class="row"><button id="mCancel">Cancel</button><button id="mGo" class="go">Join</button></div>
+  </div>
+</div>
+
+<!-- Incoming call -->
+<div id="incoming" hidden>
+  <div id="incCircle" class="circle sm">?</div>
+  <div class="txt"><b id="incName"></b><span id="incSub"></span></div>
+  <button id="incNo" style="background:#ea0038" aria-label="Decline"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.400 17.600 5 12 10.600 6.400 5 5 6.400 10.600 12 5 17.600 6.400 19 12 13.400 17.600 19 19 17.600 13.400 12z"/></svg></button>
+  <button id="incYes" style="background:#25d366" aria-label="Accept"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.600 10.800a15.100 15.100 0 0 0 6.600 6.600l2.200-2.200a1 1 0 0 1 1-.25c1.100.37 2.300.57 3.600.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.500a1 1 0 0 1 1 1c0 1.250.2 2.450.57 3.570a1 1 0 0 1-.25 1z"/></svg></button>
+</div>
+<!-- Incoming SIP call from the call centre (Issabel -> browser) -->
+<div id="sipIncoming" hidden>
+  <div id="sipIncCircle" class="circle sm">?</div>
+  <div class="txt"><b id="sipIncName"></b><span id="sipIncSub"></span></div>
+  <button id="sipIncNo" style="background:#ea0038" aria-label="Decline office call"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.400 17.600 5 12 10.600 6.400 5 5 6.400 10.600 12 5 17.600 6.400 19 12 13.400 17.600 19 19 17.600 13.400 12z"/></svg></button>
+  <button id="sipIncYes" style="background:#25d366" aria-label="Answer office call"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.600 10.800a15.100 15.100 0 0 0 6.600 6.600l2.200-2.200a1 1 0 0 1 1-.25c1.100.37 2.300.57 3.600.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.500a1 1 0 0 1 1 1c0 1.250.2 2.450.57 3.570a1 1 0 0 1-.25 1z"/></svg></button>
+</div>
+<!-- Office line call in progress -->
+<div id="sipCallBar" hidden>
+  <span class="live"></span>
+  <b id="sipCallName"></b>
+  <span id="sipCallTimer">00:00</span>
+  <button id="sipMuteBtn" class="ibtn" aria-label="Mute office call" title="Mute"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.920V21h2v-3.080A7 7 0 0 0 19 11h-2z"/></svg></button>
+  <button id="sipHangBtn" class="ibtn end" aria-label="Hang up office call" title="Hang up"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9c-1.600 0-3.150.25-4.600.72v3.100c0 .39-.23.74-.56.9-.98.49-1.870 1.120-2.660 1.850-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.080a.956.956 0 0 1-.29-.7c0-.28.11-.53.29-.71C3.340 8.780 7.460 7 12 7s8.660 1.780 11.710 4.670c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.480 2.480c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.270 11.270 0 0 0-2.670-1.850.996.996 0 0 1-.56-.9v-3.100C15.150 9.250 13.600 9 12 9z"/></svg></button>
+</div>
+<div id="lightbox" hidden><img alt=""></div>
+<div id="gtoast" hidden></div>
+
+<script>
+/* Served through the sandbox gateway? Then socket.io must be fetched with the
+   same XTransformPort query so Caddy forwards it to the right port. */
+const GATE_Q = (() => {
+  const v = new URLSearchParams(location.search).get('XTransformPort');
+  return v ? '?XTransformPort=' + encodeURIComponent(v) : '';
+})();
+document.write('<script src="/socket.io/socket.io.js' + GATE_Q + '"><\/script>');
+document.write('<script src="/jssip.min.js' + GATE_Q + '"><\/script>');
+</script>
+<script>
+'use strict';
+const rtcConfig = {
+  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+  // Strict networks may need TURN, e.g.: { urls: 'turn:your.server:3478', username: 'user', credential: 'pass' }
+};
+const $ = (id) => document.getElementById(id);
+const loadJ = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } };
+const saveJ = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+
+let socket = null, myName = loadJ('chatName', ''), pendingOpen = null, pendingMode = 'chat';
+let myUid = loadJ('chatUid', ''); if (!myUid) { myUid = Math.random().toString(36).slice(2) + Date.now().toString(36); saveJ('chatUid', myUid); }
+let savedRooms = loadJ('rooms', []), lastRead = loadJ('lastRead', {});
+const chats = new Map();            // room -> chat { room, members[], msgs[], map, unread, unreadIds[], typing Map, call, ttl }
+let current = null;                 // room open in the chat pane
+const els = new Map();              // message id -> element (open chat only)
+let ttlMs = 300000;                 // message auto-delete window (server tells us)
+
+/* ---------- helpers ---------- */
+const colors = ['#6b7c85', '#00a884', '#53bdeb', '#e26ab6', '#c98a00', '#7f66ff', '#ef6c4d'];
+const colorFor = (s) => colors[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % colors.length];
+const hhmm = (d) => new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const mmss = (s) => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+const visible = () => document.visibilityState === 'visible';
+const LOCK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" style="width:14px;height:14px;flex:none"><path d="M17 8h-1V6a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zM10 6a2 2 0 0 1 4 0v2h-4V6zm6 14H8V10h8v10zm-4-3a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>';
+const snippet = (m) => m.deleted ? 'This message was deleted'
+  : m.encPending ? '…'
+  : m.encFail ? 'Encrypted message'
+  : m.text || (m.media ? ({ image: 'Photo', audio: 'Voice message', file: 'Attachment' })[m.media.kind] || 'Attachment' : '');
+const memberCount = (c) => (c.members && c.members.length) || 1;
+function toast(t) { const el = $('gtoast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 3200); }
+function setAvatar(el, name) { el.textContent = (name ? [...name][0].toUpperCase() : '?'); el.style.background = colorFor(name || '?'); }
+
+/* ---------- end-to-end encryption (Web Crypto) ----------
+   Per room: secret key -> PBKDF2(SHA-256, 120k) -> AES-256-GCM.
+   Ciphertext format "e1.<iv>.<ct>" (url-safe base64). The secret itself lives
+   only in this browser + in the invite-link fragment (#k=...), never on the server. */
+const KEYS = loadJ('roomKeys', {});
+const derivedKeys = new Map();      // room -> Promise<CryptoKey|null>
+const ENC_RE = /^e1\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/;
+function u8ToB64(u8) { let s = ''; const CH = 0x8000; for (let i = 0; i < u8.length; i += CH) s += String.fromCharCode.apply(null, u8.subarray(i, i + CH)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function b64ToU8(str) { str = str.replace(/-/g, '+').replace(/_/g, '/'); while (str.length % 4) str += '='; const bin = atob(str); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return u8; }
+const genSecret = () => u8ToB64(crypto.getRandomValues(new Uint8Array(32)));
+function deriveKey(room) {
+  const secret = KEYS[room];
+  if (!secret) return Promise.resolve(null);
+  if (!derivedKeys.has(room)) {
+    derivedKeys.set(room, (async () => {
+      const te = new TextEncoder();
+      const base = await crypto.subtle.importKey('raw', te.encode(secret), 'PBKDF2', false, ['deriveKey']);
+      return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: te.encode('webrtc-chat-e2ee:' + room), iterations: 120000, hash: 'SHA-256' },
+        base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    })());
+  }
+  return derivedKeys.get(room);
+}
+async function encStr(room, plain) {
+  const key = await deriveKey(room); if (!key) return plain;
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(String(plain)));
+  return 'e1.' + u8ToB64(iv) + '.' + u8ToB64(new Uint8Array(ct));
+}
+async function decStr(room, s) {
+  if (s == null) return s;
+  const m = ENC_RE.exec(String(s));
+  if (!m) return String(s);                       // not encrypted (old message) -> as-is
+  const key = await deriveKey(room); if (!key) return null;   // we have no key for this room
+  try { const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64ToU8(m[1]) }, key, b64ToU8(m[2])); return new TextDecoder().decode(pt); }
+  catch (e) { return null; }                      // wrong key or tampered
+}
+// Sequential per-room queue so history + live messages decrypt in order.
+const roomChain = new Map();
+function chainJob(room, job) {
+  const p = (roomChain.get(room) || Promise.resolve()).then(job, job);
+  roomChain.set(room, p.catch(() => {}));
+  return p;
+}
+async function decMsg(room, m) {
+  const out = { ...m };
+  out.text = await decStr(room, m.text);
+  if (out.text === null) { out.encFail = true; out.text = ''; }
+  if (m.reply) { const t = await decStr(room, m.reply.text); out.reply = { name: m.reply.name, text: t === null ? '' : t }; if (t === null) out.encFail = true; }
+  if (m.media) {
+    const name = await decStr(room, m.media.name);
+    const data = await decStr(room, m.media.data);
+    out.media = { ...m.media, name: name === null ? 'Attachment' : name, data: data === null ? null : data };
+    if (name === null || data === null) { out.media.encFail = true; out.encFail = true; }
+  }
+  return out;
+}
+
+/* ---------- starting page ---------- */
+const urlRoom = new URLSearchParams(location.search).get('room') || '';
+const urlKey = (() => { const h = location.hash.match(/^#k(?:ey)?=(.+)$/); return h ? decodeURIComponent(h[1]) : ''; })();
+if (urlRoom && urlKey) { KEYS[urlRoom] = urlKey; saveJ('roomKeys', KEYS); }
+$('nameInput').value = myName; $('roomInput').value = urlRoom; if (urlKey) $('keyInput').value = urlKey;
+
+function startJoin(mode) {
+  const n = $('nameInput').value.trim();
+  if (!n) { $('lobbyError').textContent = 'Enter your name.'; $('nameInput').focus(); return; }
+  myName = n; saveJ('chatName', n);
+  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+  let room = $('roomInput').value.trim();
+  const fresh = !room;
+  if (fresh) room = 'room-' + Math.random().toString(36).slice(2, 8);
+  const secret = $('keyInput').value.trim() || KEYS[room] || genSecret();
+  KEYS[room] = secret; saveJ('roomKeys', KEYS); derivedKeys.delete(room);
+  pendingOpen = { room, type: 'room' }; pendingMode = mode;
+  enterApp();
+  if (fresh) setTimeout(() => toast('Your room is “' + room + '” — copy the invite link to share it.'), 600);
+}
+$('modeVideo').onclick = () => startJoin('video');
+$('modeAudio').onclick = () => startJoin('audio');
+$('modeChat').onclick = () => startJoin('chat');
+for (const id of ['nameInput', 'roomInput', 'keyInput']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('modeChat').click(); });
+
+function enterApp() {
+  $('lobby').hidden = true; $('app').hidden = false;
+  setAvatar($('meBtn'), myName);
+  connectSocket(); renderList(); showPane(); sipMaybeStart();
+}
+if (myName) { if (urlRoom) pendingOpen = { room: urlRoom, type: 'room' }; enterApp(); }
+
+/* ---------- socket ---------- */
+function connectSocket() {
+  if (socket) return;
+  if (typeof io === 'undefined') { setTimeout(() => toast('Could not load socket.io — is the server running?'), 500); return; }
+  socket = io('/' + GATE_Q, { transports: ['websocket', 'polling'] });
+  socket.on('connect', () => {
+    socket.emit('hello', { uid: myUid, name: myName, rooms: savedRooms });
+    if (pendingOpen) { socket.emit('open', pendingOpen); pendingOpen = null; }
+  });
+  socket.on('rooms', (list) => {
+    for (const p of list) { setRoom(p, true); if (p.ttl) ttlMs = p.ttl; }
+    renderList(); if (current && chats.has(current)) renderAll(chats.get(current));
+  });
+  socket.on('room', (p) => {
+    setRoom(p, false);
+    if (p.ttl) ttlMs = p.ttl;
+    if (!savedRooms.includes(p.room)) { savedRooms.push(p.room); saveJ('rooms', savedRooms); }
+    closeModal(); openChat(p.room);
+    if (pendingMode && pendingMode !== 'chat') { const m = pendingMode; pendingMode = 'chat'; joinCall(p.room, m); }
+    else pendingMode = 'chat';
+  });
+  socket.on('members', (p) => { const c = chats.get(p.room); if (!c) return; c.members = p.members; renderList(); if (current === p.room) updateHeader(); });
+  socket.on('notice', ({ text }) => { if (!$('modal').hidden) $('mErr').textContent = text; else toast(text); });
+
+  socket.on('chat', (m) => {
+    const c = chats.get(m.room); if (!c) return;
+    c.typing.delete(m.uid);
+    chainJob(c.room, async () => {
+      const d = await decMsg(c.room, m);
+      pushMsg(c, d);
+      socket.emit('receipt', { room: c.room, id: d.id, kind: 'delivered' });
+      c.unreadIds.push(d.id); c.unread++;
+      if (current === c.room && visible()) markRead(c); else notifyIncoming(c, d);
+      if (current === c.room) updateHeader();
+      renderList();
+    });
+  });
+  socket.on('receipt', ({ room, id, kind }) => {
+    const c = chats.get(room), m = c && c.map.get(id); if (!m || m.uid !== myUid) return;
+    const rank = { pending: 0, sent: 1, delivered: 2, read: 3 };
+    if (rank[kind] > rank[m.status || 'sent']) { m.status = kind; refreshMsg(c, id); }
+  });
+  socket.on('reactions', ({ room, id, reactions }) => { const c = chats.get(room), m = c && c.map.get(id); if (m) { m.reactions = reactions; refreshMsg(c, id); } });
+  socket.on('deleted', ({ room, id }) => {
+    const c = chats.get(room), m = c && c.map.get(id); if (!m) return;
+    Object.assign(m, { deleted: true, text: '', media: null, reply: null, reactions: {} }); refreshMsg(c, id); renderList();
+  });
+  socket.on('expired', ({ room, ids }) => removeMsgs(chats.get(room), ids));
+  socket.on('typing', ({ room, uid, name, on }) => {
+    const c = chats.get(room); if (!c) return;
+    clearTimeout(c.typingT[uid]);
+    if (on) { c.typing.set(uid, name); c.typingT[uid] = setTimeout(() => { c.typing.delete(uid); if (current === room) updateHeader(); }, 4000); } else c.typing.delete(uid);
+    if (current === room) updateHeader();
+  });
+
+  socket.on('call-state', ({ room, call: info }) => { const c = chats.get(room); if (!c) return; c.call = info; renderList(); updateBanner(); maybeRing(c); });
+  socket.on('call-full', ({ max }) => { toast(`This call is full (${max} people).`); stopMedia(); });
+  socket.on('call-joined', ({ room, id, peers: list }) => {
+    activeCall = { room, mode: callMode }; showCall();
+    for (const p of list) { addPeer(p); callPeer(peers.get(p.id)); }
+    hideIncoming(room);
+  });
+  socket.on('call-peer-joined', (p) => { if (activeCall && p.room === activeCall.room) { addPeer(p); if (!myState.mic || !myState.cam) socket.emit('state', { room: activeCall.room, ...myState }); } });
+  socket.on('call-peer-left', ({ id }) => removePeer(id));
+  socket.on('signal', ({ from, data }) => onSignal(from, data));
+  socket.on('state', ({ from, mic, cam }) => { const p = peers.get(from); if (p) { p.micOn = mic; p.camOn = cam; refreshTile(p); } });
+}
+
+function setRoom(p, initial) {
+  let c = chats.get(p.room);
+  if (!c) { c = { room: p.room, members: [], msgs: [], map: new Map(), unread: 0, unreadIds: [], typing: new Map(), typingT: {}, call: null, created: Date.now(), ttl: p.ttl || ttlMs }; chats.set(p.room, c); }
+  c.members = p.members; c.call = p.call || null; if (p.ttl) c.ttl = p.ttl;
+  if (p.history) {
+    const raw = p.history.slice();
+    c.msgs = raw.map((m) => ({ ...m, encPending: true }));
+    c.unread = initial ? c.msgs.filter((m) => m.uid !== myUid && !m.deleted && m.ts > (lastRead[c.room] ?? Date.now())).length : 0;
+    chainJob(c.room, async () => {
+      const out = [];
+      for (const m of raw) out.push(await decMsg(c.room, m));
+      const byId = new Map(out.map((m) => [m.id, m]));
+      // keep any live messages that arrived while decrypting history
+      for (const m of c.msgs) if (!byId.has(m.id) && !m.encPending) byId.set(m.id, m);
+      c.msgs = [...byId.values()].sort((a, b) => a.ts - b.ts);
+      c.map = new Map(c.msgs.map((m) => [m.id, m]));
+      if (current === c.room) renderAll(c);
+      renderList();
+    });
+  }
+}
+
+/* ---------- chat list ---------- */
+const lastTs = (c) => (c.msgs.length ? c.msgs[c.msgs.length - 1].ts : c.created);
+function renderList() {
+  const q = $('searchInput').value.trim().toLowerCase();
+  const list = [...chats.values()].filter((c) => c.room.toLowerCase().includes(q)).sort((a, b) => lastTs(b) - lastTs(a));
+  const box = $('chatList'); box.textContent = '';
+  if (!list.length) { const d = document.createElement('div'); d.className = 'noitems'; d.textContent = chats.size ? 'No chats match.' : 'No chats yet. Tap the + icon to join a room.'; box.append(d); }
+  for (const c of list) {
+    const b = document.createElement('button'); b.className = 'item' + (c.room === current ? ' active' : '');
+    const av = document.createElement('div'); av.className = 'circle sm'; setAvatar(av, c.room);
+    const mid = document.createElement('div'); mid.style.minWidth = 0;
+    const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = c.room;
+    const pv = document.createElement('div'); pv.className = 'pv';
+    const last = c.msgs[c.msgs.length - 1];
+    if (c.call) { pv.classList.add('call'); pv.textContent = (c.call.mode === 'video' ? 'Video' : 'Audio') + ' call in progress'; }
+    else if (last) pv.textContent = (last.uid === myUid ? 'You: ' : memberCount(c) > 2 ? last.name + ': ' : '') + snippet(last);
+    else pv.textContent = 'Say hello';
+    mid.append(nm, pv);
+    const meta = document.createElement('div'); meta.className = 'meta' + (c.unread ? ' new' : '');
+    const t = document.createElement('span'); const d = new Date(lastTs(c));
+    t.textContent = d.toDateString() === new Date().toDateString() ? hhmm(d) : d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+    meta.append(t);
+    if (c.unread) { const bd = document.createElement('span'); bd.className = 'badge'; bd.textContent = c.unread; meta.append(bd); }
+    b.append(av, mid, meta); b.onclick = () => openChat(c.room); box.append(b);
+  }
+  const total = [...chats.values()].reduce((a, c) => a + c.unread, 0);
+  document.title = total ? `(${total}) Call a friend` : 'Call a friend';
+}
+$('searchInput').addEventListener('input', renderList);
+$('meBtn').onclick = () => {
+  const n = (prompt('Your name', myName) || '').trim().slice(0, 30);
+  if (!n) return; myName = n; saveJ('chatName', n); setAvatar($('meBtn'), n);
+  socket && socket.emit('hello', { uid: myUid, name: myName, rooms: savedRooms });
+};
+
+/* ---------- open a chat ---------- */
+function showPane() {
+  const has = current && chats.has(current);
+  $('pane').hidden = !has; $('empty').hidden = !!has; $('app').classList.toggle('inchat', !!has);
+}
+function openChat(room) {
+  const c = chats.get(room); if (!c) return;
+  current = room; showPane(); updateHeader(); renderAll(c); markRead(c); updateBanner(); renderList();
+  if (matchMedia('(min-width: 801px)').matches) $('msgInput').focus();
+}
+$('back').onclick = () => { current = null; showPane(); renderList(); };
+function markRead(c) {
+  if (current !== c.room || !visible()) return;
+  for (const id of c.unreadIds) socket.emit('receipt', { room: c.room, id, kind: 'read' });
+  c.unreadIds = []; c.unread = 0; lastRead[c.room] = Date.now(); saveJ('lastRead', lastRead); renderList();
+}
+function updateHeader() {
+  const c = chats.get(current); if (!c) return;
+  setAvatar($('chatCircle'), c.room); $('chatName').textContent = c.room;
+  let sub;
+  if (c.typing.size) { const n = [...c.typing.values()]; sub = n.length === 1 ? `${n[0]} is typing…` : 'several people are typing…'; }
+  else {
+    const n = memberCount(c);
+    sub = n <= 1 ? 'Just you so far — share the invite link' : `You + ${n - 1} other${n > 2 ? 's' : ''}`;
+    sub += ' · End-to-end encrypted · Auto-delete 5 min';
+  }
+  $('chatSub').textContent = sub;
+}
+$('linkBtn').onclick = async () => {
+  const c = chats.get(current); if (!c) return;
+  const link = `${location.origin}${location.pathname}${GATE_Q}${GATE_Q ? '&' : '?'}room=${encodeURIComponent(c.room)}#k=${encodeURIComponent(KEYS[c.room] || '')}`;
+  try { await navigator.clipboard.writeText(link); toast('Invite link copied — it carries the room key'); } catch (e) { prompt('Copy this invite link:', link); }
+};
+$('leaveBtn').onclick = () => {
+  const c = chats.get(current); if (!c || !confirm(`Remove “${c.room}” from your list? You can rejoin it later with its name.`)) return;
+  savedRooms = savedRooms.filter((r) => r !== current); saveJ('rooms', savedRooms);
+  chats.delete(current); current = null; showPane(); renderList();
+};
+
+/* ---------- join room dialog ---------- */
+$('newBtn').onclick = () => { $('mTitle').textContent = 'Join a room'; $('mInput').value = ''; $('mKey').value = ''; $('mErr').textContent = ''; $('modal').hidden = false; $('mInput').focus(); };
+function closeModal() { $('modal').hidden = true; }
+$('mCancel').onclick = closeModal;
+$('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(); });
+$('mGo').onclick = () => {
+  const room = $('mInput').value.trim();
+  if (!room) { $('mErr').textContent = 'Enter a room name.'; return; }
+  const secret = $('mKey').value.trim() || KEYS[room] || genSecret();
+  KEYS[room] = secret; saveJ('roomKeys', KEYS); derivedKeys.delete(room);
+  pendingMode = 'chat';
+  socket.emit('open', { room, type: 'room' });
+};
+$('mInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('mGo').click(); if (e.key === 'Escape') closeModal(); });
+$('mKey').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('mGo').click(); if (e.key === 'Escape') closeModal(); });
+
+/* ---------- messages ---------- */
+const QUICK = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+const EMOJIS = '😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 😉 😍 🥰 😘 😋 😎 🤩 🥳 😏 😒 😞 😔 😢 😭 😤 😡 🤯 😱 🤔 🤗 🙄 😴 🤝 👍 👎 👏 🙌 🙏 💪 👋 ✌️ 🤞 ❤️ 🧡 💛 💚 💙 💜 🖤 💔 🔥 ✨ 🎉 🎂 🌹 ☀️ 🌙 ⭐ 💯 ✅ ❌'.split(' ');
+let replyTo = null, recorder = null, recTimer = null, recStart = 0, iAmTyping = false;
+
+function push(el) {
+  const box = $('messages');
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+  box.append(el);
+  if (atBottom || el.classList.contains('out')) box.scrollTop = box.scrollHeight;
+}
+function linkify(parent, text) {
+  for (const part of text.split(/(https?:\/\/[^\s]+)/g)) {
+    if (/^https?:\/\//.test(part)) { const a = document.createElement('a'); a.href = part; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = part; parent.append(a); }
+    else parent.append(document.createTextNode(part));
+  }
+}
+function render(c, m) {
+  const mine = m.uid === myUid;
+  const el = document.createElement('div'); el.className = 'msg ' + (mine ? 'out' : 'in'); el.dataset.id = m.id;
+  if (m.deleted) { el.classList.add('del'); el.append('This message was deleted'); }
+  else if (m.encPending) { el.classList.add('locked'); el.append('…'); }
+  else if (m.encFail && !m.text && !m.media) {
+    el.classList.add('locked');
+    const w = document.createElement('span'); w.className = 'lockline'; w.innerHTML = LOCK_SVG;
+    w.append(document.createTextNode(mine ? 'Sent encrypted' : 'Encrypted message — you need this room’s key to read it'));
+    el.append(w);
+  }
+  else {
+    if (!mine && memberCount(c) > 2 && m.name) { const w = document.createElement('span'); w.className = 'who'; w.textContent = m.name; w.style.color = colorFor(m.name); el.append(w); }
+    if (m.reply) { const q = document.createElement('div'); q.className = 'quote'; const b = document.createElement('b'); b.textContent = m.reply.name; const s = document.createElement('span'); s.textContent = m.reply.encFail ? 'Encrypted reply' : m.reply.text; q.append(b, s); el.append(q); }
+    if (m.media) {
+      const { kind, data, name } = m.media;
+      if (data == null || m.media.encFail) {
+        const d = document.createElement('div'); d.className = 'file lock';
+        const w = document.createElement('span'); w.className = 'lockline'; w.innerHTML = LOCK_SVG; w.append(document.createTextNode(' Attachment (locked)'));
+        d.append(w); el.append(d);
+      }
+      else if (kind === 'image') { const i = document.createElement('img'); i.className = 'pic'; i.src = data; i.alt = name; i.onclick = (e) => { e.stopPropagation(); $('lightbox').firstElementChild.src = data; $('lightbox').hidden = false; }; el.append(i); }
+      else if (kind === 'audio') { const a = document.createElement('audio'); a.controls = true; a.src = data; a.onclick = (e) => e.stopPropagation(); el.append(a); }
+      else { const a = document.createElement('a'); a.className = 'file'; a.href = data; a.download = name; a.textContent = 'File: ' + name; a.onclick = (e) => e.stopPropagation(); el.append(a); }
+    }
+    if (m.text) linkify(el, m.text);
+  }
+  const t = document.createElement('span'); t.className = 'time'; t.textContent = hhmm(m.ts);
+  if (mine && !m.deleted) { const k = document.createElement('span'); const st = m.status || 'sent'; k.className = 'tick' + (st === 'read' ? ' read' : ''); k.textContent = st === 'pending' ? '🕓' : st === 'sent' ? '✓' : '✓✓'; t.append(k); }
+  el.append(t);
+  const counts = {}; for (const e of Object.values(m.reactions || {})) counts[e] = (counts[e] || 0) + 1;
+  if (Object.keys(counts).length) {
+    const r = document.createElement('div'); r.className = 'reacts';
+    for (const [e, n] of Object.entries(counts)) {
+      const s = document.createElement('span'); s.textContent = n > 1 ? e + ' ' + n : e;
+      if ((m.reactions || {})[myUid] === e) s.className = 'me';
+      s.onclick = (ev) => { ev.stopPropagation(); socket.emit('react', { room: c.room, id: m.id, emoji: e }); };
+      r.append(s);
+    }
+    el.append(r);
+  }
+  if (!m.deleted && !m.encPending) el.addEventListener('click', () => toggleActions(c, el, m));
+  return el;
+}
+function renderAll(c) {
+  $('messages').textContent = ''; els.clear();
+  const info = document.createElement('div'); info.className = 'sys';
+  info.textContent = 'Messages are end-to-end encrypted and auto-delete 5 minutes after sending.';
+  $('messages').append(info);
+  for (const m of c.msgs) { const el = render(c, m); els.set(m.id, el); $('messages').append(el); }
+  $('messages').scrollTop = $('messages').scrollHeight;
+}
+function pushMsg(c, m) {
+  c.msgs.push(m); c.map.set(m.id, m);
+  if (current === c.room) { const el = render(c, m); els.set(m.id, el); push(el); }
+}
+function refreshMsg(c, id) {
+  if (current !== c.room || !els.has(id)) return;
+  const n = render(c, c.map.get(id)); els.get(id).replaceWith(n); els.set(id, n);
+}
+function removeMsgs(c, ids) {
+  if (!c || !ids || !ids.length) return;
+  const set = new Set(ids);
+  c.msgs = c.msgs.filter((m) => !set.has(m.id));
+  c.map = new Map(c.msgs.map((m) => [m.id, m]));
+  for (const id of ids) { const el = els.get(id); if (el) { el.remove(); els.delete(id); } }
+  for (const id of ids) if (c.unreadIds.includes(id)) { c.unreadIds = c.unreadIds.filter((x) => x !== id); c.unread = Math.max(0, c.unread - 1); }
+  renderList(); updateBanner();
+}
+// Backup sweep on the client, in case an 'expired' broadcast is missed.
+function sweepExpiredLocal() {
+  const now = Date.now();
+  for (const c of chats.values()) {
+    const gone = c.msgs.filter((m) => (m.exp || m.ts + (c.ttl || ttlMs)) <= now).map((m) => m.id);
+    if (gone.length) removeMsgs(c, gone);
+  }
+}
+setInterval(sweepExpiredLocal, 5000);
+
+function closeActions() { document.querySelectorAll('.actions').forEach((a) => a.remove()); }
+function toggleActions(c, el, m) {
+  const was = el.querySelector('.actions'); closeActions(); if (was) return;
+  const a = document.createElement('div'); a.className = 'actions';
+  const mk = (txt, cls, fn) => { const b = document.createElement('button'); b.textContent = txt; if (cls) b.className = cls; b.onclick = (e) => { e.stopPropagation(); closeActions(); fn(); }; a.append(b); };
+  for (const e of QUICK) mk(e, '', () => socket.emit('react', { room: c.room, id: m.id, emoji: e }));
+  mk('Reply', 'txt', () => { replyTo = { name: m.uid === myUid ? 'You' : m.name, text: snippet(m) }; $('rqName').textContent = replyTo.name; $('rqText').textContent = replyTo.text; $('replyBar').hidden = false; $('msgInput').focus(); });
+  if (m.uid === myUid) mk('Delete', 'txt', () => socket.emit('delete', { room: c.room, id: m.id }));
+  el.append(a);
+  const r = a.getBoundingClientRect();
+  if (r.bottom > window.innerHeight - 4 || r.top < 0) a.classList.add('above');
+  a.scrollIntoView({ block: 'nearest' });
+}
+document.addEventListener('click', (e) => { if (!e.target.closest('.msg')) closeActions(); });
+$('rqClose').onclick = () => { replyTo = null; $('replyBar').hidden = true; };
+$('lightbox').onclick = () => { $('lightbox').hidden = true; };
+
+async function sendMsg(media) {
+  const c = chats.get(current); const input = $('msgInput');
+  const text = media && media.kind === 'audio' ? '' : input.value.trim();
+  if (!c || !socket || (!text && !media)) return;
+  const id = genId();
+  const ts = Date.now();
+  const reply = replyTo ? { name: replyTo.name, text: replyTo.text.slice(0, 120) } : null;
+  // local copy holds plaintext so the sender sees their own message
+  const local = { id, uid: myUid, name: myName, ts, exp: ts + (c.ttl || ttlMs), text, media: media ? { ...media } : null, reactions: {}, status: 'pending', reply };
+  // wire copy is end-to-end encrypted
+  const wire = { room: c.room, id, text: await encStr(c.room, text), media: null, reply: reply ? { name: reply.name, text: await encStr(c.room, reply.text) } : null };
+  if (media) wire.media = { kind: media.kind, mime: media.mime, name: await encStr(c.room, media.name || 'file'), data: await encStr(c.room, media.data) };
+  socket.emit('chat', wire, () => { local.status = 'sent'; refreshMsg(c, id); });
+  pushMsg(c, local);
+  input.value = ''; replyTo = null; $('replyBar').hidden = true; setTyping(false); updateSendBtn(); renderList();
+  if (!media) input.focus();
+}
+function setTyping(on) { if (iAmTyping !== on && socket && current) { iAmTyping = on; socket.emit('typing', { room: current, on }); } }
+$('msgInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMsg(); } if (e.key === 'Escape' && recorder) stopRec(false); });
+$('msgInput').addEventListener('input', () => { updateSendBtn(); setTyping(true); clearTimeout(setTyping.t); setTyping.t = setTimeout(() => setTyping(false), 1500); });
+
+/* emoji, attachments, voice */
+for (const e of EMOJIS) { const b = document.createElement('button'); b.textContent = e; b.onclick = () => { const i = $('msgInput'); i.value += e; i.focus(); updateSendBtn(); }; $('emoji').append(b); }
+$('emojiBtn').onclick = () => { $('emoji').hidden = !$('emoji').hidden; };
+$('attachBtn').onclick = () => $('fileInput').click();
+$('fileInput').onchange = async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) await sendFile(f); };
+const readData = (blob) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+function downscale(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => { const k = Math.min(1, 1280 / Math.max(img.width, img.height)); const cv = document.createElement('canvas'); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k); cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url); res(cv.toDataURL('image/jpeg', 0.72)); };
+    img.onerror = () => rej(new Error('bad image')); img.src = url;
+  });
+}
+async function sendFile(f) {
+  try {
+    if (f.type.startsWith('image/')) sendMsg({ kind: 'image', name: f.name, mime: 'image/jpeg', data: await downscale(f) });
+    else if (f.size > 2e6) toast('Files can be up to 2 MB.');
+    else sendMsg({ kind: 'file', name: f.name, mime: f.type, data: await readData(f) });
+  } catch (err) { toast('Could not send that file.'); }
+}
+
+/* ---------- paste to send: Ctrl+V a screenshot straight into the chat ----------
+   Works like WhatsApp: copy a screenshot (Lightshot, Win+Shift+S, macOS ⌘⇧4),
+   a photo, or a file in the file manager, press Ctrl+V anywhere in the chat and
+   it is sent to the open room as an encrypted attachment. Pasting TEXT is
+   untouched — the browser does that as usual. */
+function clipboardFiles(dt) {
+  const out = [], seen = new Set();
+  const add = (f) => {
+    if (!f) return;
+    const key = (f.name || '') + '|' + f.size + '|' + f.type;   // same blob via items + files
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(new File([f], f.name || 'pasted', { type: f.type || 'application/octet-stream', lastModified: f.lastModified || Date.now() }));
+  };
+  if (dt) {
+    for (const it of dt.items || []) if (it.kind === 'file') add(it.getAsFile());  // screenshots, copied images
+    for (const f of dt.files || []) add(f);                                        // files copied in Explorer/Finder
+  }
+  return out;
+}
+function pasteFriendlyName(f) {
+  if (f.name && !/^(image\.png|pasted(\.\w+)?)$/i.test(f.name)) return f.name;   // real file keeps its name
+  const d = new Date(), p = (n) => String(n).padStart(2, '0');
+  const ext = /jpeg|jpg/.test(f.type) ? 'jpg' : /gif/.test(f.type) ? 'gif' : 'png';
+  return `Screenshot ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}.${p(d.getMinutes())}.${p(d.getSeconds())}.${ext}`;
+}
+document.addEventListener('paste', (e) => {
+  if (!current || !$('modal').hidden) return;      // no chat open, or typing a room name -> normal paste
+  const files = clipboardFiles(e.clipboardData);
+  if (!files.length) return;                       // clipboard has no image/file -> text paste, do nothing
+  e.preventDefault();
+  for (const f of files) sendFile(new File([f], pasteFriendlyName(f), { type: f.type, lastModified: f.lastModified }));
+});
+// Send button is ALWAYS visible: active as soon as there is text or a recording.
+function updateSendBtn() {
+  const rec = !!recorder;
+  const ready = !!$('msgInput').value.trim() || rec;
+  $('sendBtn').disabled = !ready;
+  $('voiceBtn').hidden = rec; $('cancelRec').hidden = !rec;
+  $('composer').classList.toggle('rec', rec);
+  $('sendBtn').ariaLabel = rec ? 'Send voice message' : 'Send message';
+}
+$('sendBtn').onclick = () => { if (recorder) stopRec(true); else sendMsg(); };
+$('voiceBtn').onclick = () => startRec();
+$('cancelRec').onclick = () => stopRec(false);
+async function startRec() {
+  if (!navigator.mediaDevices || !window.MediaRecorder) { toast('Voice messages need HTTPS (use the :3443 address).'); return; }
+  let stream; try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { toast('Microphone is blocked.'); return; }
+  const chunks = []; recorder = new MediaRecorder(stream);
+  recorder.ondataavailable = (e) => chunks.push(e.data);
+  recorder.onstop = async () => {
+    const send = recorder._send, type = recorder.mimeType; recorder = null;
+    stream.getTracks().forEach((t) => t.stop()); clearInterval(recTimer);
+    $('msgInput').placeholder = 'Type a message'; updateSendBtn();
+    if (!send || !chunks.length) return;
+    const data = await readData(new Blob(chunks, { type }));
+    if (data.length > 3.5e6) toast('Voice message is too long.'); else sendMsg({ kind: 'audio', name: 'Voice message', mime: type, data });
+  };
+  recorder.start(); recStart = Date.now();
+  recTimer = setInterval(() => { $('msgInput').placeholder = 'Recording… ' + mmss(Math.floor((Date.now() - recStart) / 1000)); }, 300);
+  $('msgInput').placeholder = 'Recording… 00:00'; updateSendBtn();
+}
+function stopRec(send) { if (recorder) { recorder._send = send; recorder.stop(); } }
+
+/* sounds + notifications */
+function beep(freq = 880, ms = 120) {
+  try { const a = new (window.AudioContext || window.webkitAudioContext)(), o = a.createOscillator(), g = a.createGain(); o.frequency.value = freq; g.gain.value = 0.05; o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + ms / 1000); } catch (e) {}
+}
+function notifyIncoming(c, m) {
+  beep();
+  if ('Notification' in window && Notification.permission === 'granted' && !visible()) { try { new Notification(c.room, { body: (memberCount(c) > 2 ? m.name + ': ' : '') + snippet(m) }); } catch (e) {} }
+}
+document.addEventListener('visibilitychange', () => { const c = chats.get(current); if (c) markRead(c); });
+
+/* ---------- calls (WebRTC mesh, one peer connection per person) ---------- */
+let activeCall = null, callMode = 'video', localStream = null, myState = { mic: true, cam: true };
+const peers = new Map();
+let timerId = null, callStart = 0;
+
+async function joinCall(room, mode) {
+  if (activeCall) { toast('You are already in a call.'); return; }
+  if (!navigator.mediaDevices) { toast('Calls need HTTPS. Open the https:// address (port 3443).'); return; }
+  try { localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: mode === 'video' }); }
+  catch (err) { toast('Could not access ' + (mode === 'video' ? 'camera/mic' : 'microphone') + ': ' + err.message); return; }
+  callMode = mode; socket.emit('call-join', { room, mode });
+}
+$('videoBtn').onclick = () => current && joinCall(current, 'video');
+$('audioBtn').onclick = () => current && joinCall(current, 'audio');
+$('bJoinV').onclick = () => joinCall(current, 'video');
+$('bJoinA').onclick = () => joinCall(current, 'audio');
+$('bReturn').onclick = () => { if (activeCall.room !== current) openChat(activeCall.room); $('callView').hidden = false; updateBanner(); };
+$('minBtn').onclick = () => { $('callView').hidden = true; updateBanner(); };
+$('hangBtn').onclick = hangUp;
+
+function showCall() {
+  myState = { mic: true, cam: true };
+  $('micBtn').classList.remove('off'); $('camBtn').classList.remove('off');
+  $('camBtn').hidden = callMode !== 'video';
+  $('callView').classList.toggle('audio', callMode === 'audio');
+  $('localVideo').srcObject = localStream;
+  const c = chats.get(activeCall.room); $('callTitle').textContent = c ? c.room : '';
+  $('callView').hidden = false; if (current !== activeCall.room) openChat(activeCall.room);
+  layout(); updateTimer(); updateBanner();
+}
+function updateBanner() {
+  const c = chats.get(current), b = $('banner');
+  const showReturn = activeCall && $('callView').hidden;
+  const showJoin = c && c.call && !activeCall;
+  b.hidden = !(showReturn || showJoin);
+  $('bReturn').hidden = !showReturn; $('bJoinV').hidden = $('bJoinA').hidden = !showJoin;
+  $('bannerText').textContent = showReturn ? 'Call in progress' : showJoin ? `${c.call.starter} started a ${c.call.mode} call (${c.call.count} in call)` : '';
+}
+
+function addPeer({ id, name }) {
+  if (peers.has(id)) return;
+  const p = { id, name, pc: null, stream: null, pending: [], tile: null, vLive: false, micOn: true, camOn: true, connected: false };
+  peers.set(id, p); makeTile(p); layout();
+}
+function makeTile(p) {
+  const el = document.createElement('div'); el.className = 'tile';
+  const video = document.createElement('video'); video.autoplay = true; video.playsInline = true;
+  const av = document.createElement('div'); av.className = 'av';
+  const circle = document.createElement('div'); circle.className = 'circle'; setAvatar(circle, p.name); av.append(circle);
+  const label = document.createElement('div'); label.className = 'label';
+  const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.name;
+  const mb = document.createElement('span'); mb.className = 'mb'; mb.textContent = 'muted'; mb.hidden = true;
+  label.append(nm, mb); el.append(video, av, label); $('grid').append(el); p.tile = { el, video, av, mb };
+}
+function refreshTile(p) {
+  if (!p.tile) return;
+  const on = p.vLive && p.camOn;
+  p.tile.video.classList.toggle('on', on); p.tile.av.hidden = on; p.tile.mb.hidden = p.micOn;
+}
+function removePeer(id) {
+  const p = peers.get(id); if (!p) return;
+  closePC(p); if (p.tile) p.tile.el.remove(); peers.delete(id); layout(); updateTimer();
+}
+function layout() { const n = $('grid').children.length; $('grid').dataset.n = n; $('wait').hidden = n > 0; }
+
+function makePC(p, isCaller) {
+  closePC(p);
+  const pc = new RTCPeerConnection(rtcConfig);
+  p.pc = pc; p.stream = new MediaStream(); p.pending = []; p.tile.video.srcObject = p.stream;
+  if (isCaller) for (const kind of ['audio', 'video']) {      // always offer both so either mode can connect
+    const track = localStream.getTracks().find((t) => t.kind === kind);
+    pc.addTransceiver(track || kind, { direction: 'sendrecv', streams: [localStream] });
+  }
+  pc.onicecandidate = (e) => { if (e.candidate) sendSig(p.id, { ice: e.candidate.toJSON() }); };
+  pc.ontrack = (e) => {
+    p.stream.addTrack(e.track);
+    if (e.track.kind === 'video') { const sync = () => { p.vLive = !e.track.muted; refreshTile(p); }; e.track.onmute = sync; e.track.onunmute = sync; sync(); }
+    p.tile.video.play().catch(() => {});
+  };
+  pc.onconnectionstatechange = () => {
+    p.connected = pc.connectionState === 'connected'; updateTimer();
+    if (pc.connectionState === 'failed') toast(`Could not connect to ${p.name}. A TURN server may be needed.`);
+  };
+  return pc;
+}
+function closePC(p) {
+  if (p.pc) { p.pc.onconnectionstatechange = null; p.pc.close(); p.pc = null; }
+  p.connected = false; p.vLive = false; p.pending = [];
+  if (p.tile) { p.tile.video.srcObject = null; refreshTile(p); }
+}
+const sendSig = (to, data) => socket.emit('signal', { room: activeCall.room, to, data });
+async function callPeer(p) {
+  if (!p || !p.tile) return;
+  const pc = makePC(p, true);
+  await pc.setLocalDescription(await pc.createOffer());
+  sendSig(p.id, { type: 'offer', sdp: pc.localDescription.sdp });
+}
+async function onSignal(from, data) {
+  const p = peers.get(from); if (!p || !p.tile || !localStream) return;
+  try {
+    if (data.type === 'offer') {
+      const pc = makePC(p, false);
+      await pc.setRemoteDescription({ type: 'offer', sdp: data.sdp });
+      for (const tr of pc.getTransceivers()) {
+        const track = localStream.getTracks().find((t) => t.kind === tr.receiver.track.kind);
+        if (track) await tr.sender.replaceTrack(track);
+        tr.direction = 'sendrecv';
+      }
+      await flush(p);
+      await pc.setLocalDescription(await pc.createAnswer());
+      sendSig(from, { type: 'answer', sdp: pc.localDescription.sdp });
+    } else if (data.type === 'answer') {
+      if (p.pc) { await p.pc.setRemoteDescription({ type: 'answer', sdp: data.sdp }); await flush(p); }
+    } else if (data.ice) {
+      if (p.pc && p.pc.remoteDescription) { try { await p.pc.addIceCandidate(data.ice); } catch (e) {} } else p.pending.push(data.ice);
+    }
+  } catch (err) { console.warn('signal error', err); }
+}
+async function flush(p) { for (const c of p.pending) { try { await p.pc.addIceCandidate(c); } catch (e) {} } p.pending = []; }
+
+function updateTimer() {
+  const connected = [...peers.values()].filter((p) => p.connected).length;
+  if (connected && !timerId) { callStart = Date.now(); timerId = setInterval(updatePill, 1000); }
+  if (!connected && timerId) { clearInterval(timerId); timerId = null; }
+  updatePill();
+}
+function updatePill() {
+  const connected = [...peers.values()].filter((p) => p.connected).length;
+  let t = '';
+  if (activeCall) t = timerId ? (peers.size > 1 ? `${connected + 1} in call, ` : '') + mmss(Math.floor((Date.now() - callStart) / 1000)) : peers.size ? 'Connecting…' : '';
+  $('pill').textContent = t; $('pill').hidden = !t;
+}
+$('micBtn').onclick = () => {
+  const t = localStream && localStream.getAudioTracks()[0]; if (!t) return;
+  t.enabled = !t.enabled; myState.mic = t.enabled; socket.emit('state', { room: activeCall.room, ...myState });
+  $('micBtn').classList.toggle('off', !t.enabled); $('micBtn').title = $('micBtn').ariaLabel = t.enabled ? 'Mute microphone' : 'Unmute microphone';
+};
+$('camBtn').onclick = () => {
+  const t = localStream && localStream.getVideoTracks()[0]; if (!t) return;
+  t.enabled = !t.enabled; myState.cam = t.enabled; socket.emit('state', { room: activeCall.room, ...myState });
+  $('camBtn').classList.toggle('off', !t.enabled); $('camBtn').title = $('camBtn').ariaLabel = t.enabled ? 'Turn camera off' : 'Turn camera on';
+};
+function stopMedia() { if (localStream) { localStream.getTracks().forEach((t) => t.stop()); localStream = null; } $('localVideo').srcObject = null; }
+function hangUp() {
+  if (!activeCall) return;
+  const room = activeCall.room;
+  for (const p of peers.values()) { closePC(p); if (p.tile) p.tile.el.remove(); }
+  peers.clear(); layout();
+  if (timerId) { clearInterval(timerId); timerId = null; }
+  const c = chats.get(room); if (c && c.call) dismissed.add(room + ':' + c.call.startedAt);
+  socket.emit('call-leave', { room });
+  stopMedia(); activeCall = null; $('callView').hidden = true; updatePill(); updateBanner(); renderList();
+}
+window.addEventListener('beforeunload', () => { if (activeCall && socket) socket.emit('call-leave', { room: activeCall.room }); });
+
+/* incoming call ringing */
+const dismissed = new Set(); let ringing = null, ringTimer = null;
+function maybeRing(c) {
+  const call = c.call;
+  if (!call) { hideIncoming(c.room); return; }
+  if (activeCall || call.starterUid === myUid) return;
+  const key = c.room + ':' + call.startedAt;
+  if (dismissed.has(key) || (ringing && ringing.key === key)) return;
+  ringing = { room: c.room, key, mode: call.mode };
+  setAvatar($('incCircle'), c.room); $('incName').textContent = c.room;
+  $('incSub').textContent = `${call.starter} is calling (${call.mode})`;
+  $('incoming').hidden = false; beep(660, 250); clearInterval(ringTimer); ringTimer = setInterval(() => beep(660, 250), 1800);
+}
+function hideIncoming(room) { if (ringing && (!room || ringing.room === room)) { ringing = null; $('incoming').hidden = true; clearInterval(ringTimer); } }
+$('incNo').onclick = () => { if (ringing) dismissed.add(ringing.key); hideIncoming(); };
+$('incYes').onclick = () => { if (!ringing) return; const { room, mode, key } = ringing; dismissed.add(key); hideIncoming(); openChat(room); joinCall(room, mode); };
+
+/* ---------- office line: SIP over WebSocket (Issabel / Asterisk) ----------
+   Registers this browser at your PBX as a PJSIP extension (one per customer,
+   e.g. C07030512). Setup instructions: SIP-SETUP-GUIDE.md in the project root.
+   - Inbound:  the CRM dispatcher dials PJSIP/<extension> -> this browser rings.
+   - Outbound: dial the call centre queue number from the office line panel.
+   Audio is WebRTC between the browser and Asterisk (DTLS-SRTP). Chat, rooms
+   and room calls are completely unaffected. */
+const SIP_DEF = { server: 'wss://172.31.21.35:8089/ws', domain: '172.31.21.35', ext: '', pass: '' };
+let sipSettings = Object.assign({}, SIP_DEF, loadJ('sipSettings', {}));
+let sipUA = null, sipSession = null, sipTimerId = null, sipRingT = null, sipSecs = 0;
+let sipMuted = false, sipAudio = null, sipAccepted = false, sipPeerLabel = '', sipDeclined = false;
+
+function sipSetStatus(kind, text) {
+  $('sipDot').className = kind;                       // '' | 'ok' | 'err' | 'wait'
+  $('sipStatus').textContent = text;
+  $('sipBtn').classList.toggle('on', kind === 'ok');
+}
+function sipConfigured() { return !!(sipSettings.ext && sipSettings.pass && sipSettings.server && sipSettings.domain); }
+function sipMaybeStart() {
+  if (sipConfigured()) sipStart();
+  else sipSetStatus('', 'Office line is off — tap the headset to set it up');
+}
+function sipStart() {
+  sipStopUA();
+  if (!sipConfigured()) { sipSetStatus('', 'Fill extension, password, PBX URL and domain, then Save.'); return; }
+  if (typeof JsSIP === 'undefined') { sipSetStatus('err', 'jssip.min.js is missing from the app public/ folder.'); return; }
+  try {
+    const sock = new JsSIP.WebSocketInterface(sipSettings.server);
+    sipUA = new JsSIP.UA({
+      sockets: [sock],
+      uri: 'sip:' + sipSettings.ext + '@' + sipSettings.domain,
+      password: sipSettings.pass,
+      register: true,
+      register_expires: 300,
+      connection_recovery_min_interval: 3,
+      connection_recovery_max_interval: 60,
+    });
+    sipUA.on('connected', () => { if (!sipAccepted) sipSetStatus('wait', 'Connected to PBX, registering ' + sipSettings.ext + '…'); });
+    sipUA.on('disconnected', () => { if (!sipSession) sipSetStatus('err', 'PBX unreachable — check the WebSocket URL and firewall (TCP 8088/8089).'); });
+    sipUA.on('registered', () => sipSetStatus('ok', 'Office line ready — extension ' + sipSettings.ext + ' can receive calls'));
+    sipUA.on('registrationFailed', (e) => sipSetStatus('err', 'Register failed: ' + (e && e.cause ? e.cause : 'error') + ' — check extension/password.'));
+    sipUA.on('unregistered', () => { if (!sipSession) sipSetStatus('err', 'Lost registration at ' + sipSettings.domain + ' — retrying…'); });
+    sipUA.on('newRTCSession', (e) => { if (e.originator === 'remote') sipIncomingCall(e.session, e.request); else sipOutgoingSession(e.session); });
+    sipUA.start();
+    sipSetStatus('wait', 'Connecting to ' + sipSettings.server + '…');
+  } catch (err) { sipSetStatus('err', 'Bad settings: ' + err.message); }
+}
+function sipStopUA() {
+  if (sipUA) { try { sipUA.stop(); } catch (e) {} sipUA = null; }
+  sipSetStatus('', 'Office line is off');
+}
+
+/* ----- incoming (Issabel -> browser) ----- */
+function sipIncomingCall(session, request) {
+  if (sipSession) { try { session.reject({ statusCode: 486 }); } catch (e) {} return; }   // busy: second call rejected
+  sipSession = session; sipAccepted = false;
+  const from = request && request.from;
+  const num = from && from.uri ? String(from.uri.user || '') : '';
+  const nm = (from && from.displayName) || num || 'Unknown caller';
+  sipPeerLabel = nm;
+  $('sipIncName').textContent = nm;
+  $('sipIncSub').textContent = (num && num !== nm ? num + ' · ' : '') + 'Office line call';
+  setAvatar($('sipIncCircle'), nm);
+  $('sipIncoming').hidden = false;
+  clearInterval(sipRingT); sipRingT = setInterval(() => beep(660, 250), 1800); beep(660, 250);
+  session.on('failed', (e) => {
+    const cause = e && e.cause ? e.cause : '';
+    if (sipDeclined) { /* caller declined on purpose: no toast */ }
+    else if (sipAccepted) toast('Office call ended');
+    else if (/denied|media/i.test(cause)) toast('Microphone is blocked — allow it and ask to be called again');
+    else toast('Missed call: ' + sipPeerLabel);
+    sipCleanup();
+  });
+  session.on('ended', () => sipCleanup());
+  session.on('accepted', () => sipAcceptedNow());
+}
+function sipAnswer() {
+  if (!sipSession) return;
+  clearInterval(sipRingT);
+  $('sipIncoming').hidden = true;
+  try {
+    sipSession.answer({ mediaConstraints: { audio: true, video: false },
+      pcConfig: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } });
+  } catch (e) { toast('Could not answer: ' + e.message); sipCleanup(); }
+}
+function sipDecline() { clearInterval(sipRingT); sipDeclined = true; try { if (sipSession) sipSession.terminate(); } catch (e) {} sipCleanup(); sipDeclined = false; }
+
+/* ----- outgoing (browser -> call centre) ----- */
+function sipDial() {
+  const num = ($('sipDialNum').value || '').replace(/[^0-9*#+]/g, '');
+  if (!num) { $('sipDialNum').focus(); return; }
+  if (sipSession) { toast('Already in a call.'); return; }
+  if (!sipUA) { toast('Office line is off — save your SIP settings first.'); return; }
+  sipPeerLabel = num;
+  sipSession = sipUA.call('sip:' + num + '@' + sipSettings.domain, {
+    mediaConstraints: { audio: true, video: false },
+    pcConfig: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+    eventHandlers: {
+      accepted: () => sipAcceptedNow(),
+      ended: () => sipCleanup(),
+      failed: (e) => { toast('Call failed: ' + (e && e.cause ? e.cause : 'error')); sipCleanup(); },
+    },
+  });
+  sipAccepted = false;
+  $('sipCallName').textContent = num;
+  $('sipCallTimer').textContent = 'calling…';
+  $('sipCallBar').hidden = false;
+}
+function sipOutgoingSession() { /* booked for future use; handlers live in sipDial() */ }
+
+/* ----- shared in-call UI ----- */
+function sipAcceptedNow() {
+  sipAccepted = true;
+  clearInterval(sipRingT);
+  $('sipIncoming').hidden = true;
+  $('sipCallName').textContent = sipPeerLabel;
+  $('sipCallTimer').textContent = '00:00';
+  $('sipCallBar').hidden = false;
+  sipAttachAudio();
+  sipSecs = 0;
+  clearInterval(sipTimerId);
+  sipTimerId = setInterval(() => { sipSecs++; $('sipCallTimer').textContent = mmss(sipSecs); }, 1000);
+}
+function sipAttachAudio(attempt = 0) {
+  if (!sipSession || !sipSession.connection) return;
+  if (!sipAudio) { sipAudio = document.createElement('audio'); sipAudio.autoplay = true; sipAudio.style.display = 'none'; document.body.appendChild(sipAudio); }
+  const streams = sipSession.connection.getRemoteStreams ? sipSession.connection.getRemoteStreams() : [];
+  const s = streams[0];
+  if (s && s.getAudioTracks().length) { sipAudio.srcObject = s; sipAudio.play().catch(() => {}); }
+  else if (attempt < 20) setTimeout(() => sipAttachAudio(attempt + 1), 300);
+}
+function sipHangup() { if (sipSession) { try { sipSession.terminate(); } catch (e) {} } sipCleanup(); }
+function sipCleanup() {
+  clearInterval(sipTimerId); clearInterval(sipRingT);
+  $('sipCallBar').hidden = true; $('sipIncoming').hidden = true;
+  if (sipAudio) sipAudio.srcObject = null;
+  sipSession = null; sipAccepted = false; sipMuted = false;
+  $('sipMuteBtn').classList.remove('muted');
+}
+
+/* ----- panel wiring ----- */
+$('sipBtn').onclick = () => {
+  const p = $('sipPanel');
+  p.classList.toggle('open');
+  if (p.classList.contains('open')) {
+    $('sipExt').value = sipSettings.ext || (current || '');
+    $('sipPass').value = sipSettings.pass || '';
+    $('sipServer').value = sipSettings.server || SIP_DEF.server;
+    $('sipDomain').value = sipSettings.domain || SIP_DEF.domain;
+    if (!$('sipDialNum').value) $('sipDialNum').value = '09611666111';
+    if (matchMedia('(min-width: 801px)').matches) $('sipExt').focus();
+  }
+};
+$('sipSaveBtn').onclick = () => {
+  sipSettings = { ext: $('sipExt').value.trim(), pass: $('sipPass').value, server: $('sipServer').value.trim(), domain: $('sipDomain').value.trim() };
+  saveJ('sipSettings', sipSettings);
+  sipStart();
+};
+$('sipOffBtn').onclick = () => { sipHangup(); sipStopUA(); };
+$('sipDialBtn').onclick = () => sipDial();
+$('sipDialNum').addEventListener('keydown', (e) => { if (e.key === 'Enter') sipDial(); });
+$('sipIncYes').onclick = () => sipAnswer();
+$('sipIncNo').onclick = () => sipDecline();
+$('sipHangBtn').onclick = () => sipHangup();
+$('sipMuteBtn').onclick = () => {
+  if (!sipSession) return;
+  try { if (sipMuted) sipSession.unmute({ audio: true }); else sipSession.mute({ audio: true });
+        sipMuted = !sipMuted; $('sipMuteBtn').classList.toggle('muted', sipMuted); } catch (e) {}
+};
+sipMaybeStart();
+
+/* QA hook (harmless in production): window.__sip.info() / window.__sip.testIncoming() */
+window.__sip = {
+  info: () => ({ configured: sipConfigured(), ua: !!sipUA, session: !!sipSession, ext: sipSettings.ext, server: sipSettings.server, domain: sipSettings.domain }),
+  testIncoming: (num = '09611666111', name = 'Test caller') => {
+    const h = {};
+    const mock = { on: (ev, cb) => { h[ev] = cb; }, answer: async () => { if (h.accepted) h.accepted(); }, terminate: () => { if (h.ended) h.ended(); }, reject: () => {}, mute: () => {}, unmute: () => {}, connection: null };
+    sipIncomingCall(mock, { from: { uri: { user: num }, displayName: name } });
+    return 'test call from ' + num;
+  },
+};
+</script>
+</body>
+</html>
