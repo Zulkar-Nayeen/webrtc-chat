@@ -512,7 +512,12 @@ function connectSocket() {
   });
   socket.on('rooms', (list) => {
     for (const p of list) { setRoom(p, true); if (p.ttl) ttlMs = p.ttl; }
+    // rooms saved in this browser that the server did not return (e.g. it restarted): quietly join them again
+    const got = new Set(list.map((p) => p.room));
+    for (const r of savedRooms) if (!got.has(r) && !chats.has(r) && !(pendingOpen && pendingOpen.room === r)) socket.emit('open', { room: r, type: 'room' });
     renderList(); if (current && chats.has(current)) renderAll(chats.get(current));
+    // after a refresh, go straight back into the room that was open
+    if (!current) { const lr = loadJ('lastRoom', ''); if (lr && chats.has(lr)) openChat(lr); }
   });
   socket.on('room', (p) => {
     setRoom(p, false);
@@ -633,10 +638,10 @@ function showPane() {
 }
 function openChat(room) {
   const c = chats.get(room); if (!c) return;
-  current = room; showPane(); updateHeader(); renderAll(c); markRead(c); updateBanner(); renderList();
+  current = room; saveJ('lastRoom', room); showPane(); updateHeader(); renderAll(c); markRead(c); updateBanner(); renderList();
   if (matchMedia('(min-width: 801px)').matches) $('msgInput').focus();
 }
-$('back').onclick = () => { current = null; showPane(); renderList(); };
+$('back').onclick = () => { current = null; saveJ('lastRoom', ''); showPane(); renderList(); };
 function markRead(c) {
   if (current !== c.room || !visible()) return;
   for (const id of c.unreadIds) socket.emit('receipt', { room: c.room, id, kind: 'read' });
@@ -662,7 +667,7 @@ $('linkBtn').onclick = async () => {
 $('leaveBtn').onclick = () => {
   const c = chats.get(current); if (!c || !confirm(`Remove “${c.room}” from your list? You can rejoin it later with its name.`)) return;
   savedRooms = savedRooms.filter((r) => r !== current); saveJ('rooms', savedRooms);
-  chats.delete(current); current = null; showPane(); renderList();
+  chats.delete(current); current = null; saveJ('lastRoom', ''); showPane(); renderList();
 };
 
 /* ---------- join room dialog ---------- */
